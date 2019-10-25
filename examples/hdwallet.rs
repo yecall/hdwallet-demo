@@ -54,6 +54,8 @@ fn main() {
 	xlm_derivation(seed.clone());
 
 	algo_derivation(seed.clone());
+
+	yee_derivation(seed.clone());
 }
 
 fn btc_derivation(seed: Seed) {
@@ -117,7 +119,7 @@ fn btc84_derivation(seed: Seed) {
 
 	let public_key = PublicKey::from_secret_key(&*SECP256K1_SIGN_ONLY, &private_key);
 	let private_key = btc_wif(&from_hex(&format!("{}", private_key)));
-	let address = bech32_address(public_key, "bc", Some(0));
+	let address = bech32_address(&public_key.serialize()[..], "bc", Some(0));
 
 	println!("  address#0 private key = {}", private_key);
 	println!("  address#0 public key = {}", public_key);
@@ -257,7 +259,7 @@ fn ltc_derivation(seed: Seed) {
 
 	let public_key = PublicKey::from_secret_key(&*SECP256K1_SIGN_ONLY, &private_key);
 	let private_key = ltc_wif(&from_hex(&format!("{}", private_key)));
-	let address = bech32_address(public_key, "ltc", Some(0));
+	let address = bech32_address(&public_key.serialize()[..], "ltc", Some(0));
 
 	println!("  address#0 private key = {}", private_key);
 	println!("  address#0 public key = {}", public_key);
@@ -292,7 +294,7 @@ fn bnb_derivation(seed: Seed) {
 
 	let public_key = PublicKey::from_secret_key(&*SECP256K1_SIGN_ONLY, &private_key);
 	let private_key = ltc_wif(&from_hex(&format!("{}", private_key)));
-	let address = bech32_address(public_key, "bnb", None);
+	let address = bech32_address(&public_key.serialize()[..], "bnb", None);
 
 	println!("  address#0 private key = {}", private_key);
 	println!("  address#0 public key = {}", public_key);
@@ -364,7 +366,7 @@ fn atom_derivation(seed: Seed) {
 
 	let public_key = PublicKey::from_secret_key(&*SECP256K1_SIGN_ONLY, &private_key);
 	let private_key = ltc_wif(&from_hex(&format!("{}", private_key)));
-	let address = bech32_address(public_key, "cosmos", None);
+	let address = bech32_address(&public_key.serialize()[..], "cosmos", None);
 
 	println!("  address#0 private key = {}", private_key);
 	println!("  address#0 public key = {}", public_key);
@@ -521,6 +523,85 @@ fn algo_derivation(seed: Seed) {
 	println!("  address#0 address = {}", address);
 
 	assert_eq!(address, "RSY4ZSL3OHVIRAAF3F7MEZCGSDONN6TZ3AGJ5GGYIAB4PRUCN2BULX3UMQ");
+
+}
+
+fn yee_derivation(seed: Seed) {
+	const HARDENED_KEY_START_INDEX: u32 = 2_147_483_648; // 2 ** 31
+
+	let seed = seed.as_bytes();
+
+	let signature = {
+		let signing_key = Key::new(HMAC_SHA512, b"ed25519 seed");
+		let mut h = Context::with_key(&signing_key);
+		h.update(seed);
+		h.sign()
+	};
+	let sig_bytes = signature.as_ref();
+	let (private_key, chain_code) = sig_bytes.split_at(sig_bytes.len() / 2);
+//	println!("{:x?}", private_key);
+//	println!("{:x?}", chain_code);
+
+	let extended_private_key = ExtendedPrivKey { private_key: SecretKey::from_slice(private_key).expect("qed"), chain_code: chain_code.to_vec() };
+	let derivation = Derivation {
+		depth: 0u8,
+		parent_key: None,
+		key_index: None,
+	};
+	let key = serialize_extended_key::<XlmStrategy>(ExtendedKey::PrivKey(extended_private_key), &derivation);
+
+	println!("YEE:");
+	println!("  root key = {}", key);
+
+	let path = vec![
+		44u32 + HARDENED_KEY_START_INDEX,
+		4096u32 + HARDENED_KEY_START_INDEX,
+		0u32 + HARDENED_KEY_START_INDEX,
+		0u32 + HARDENED_KEY_START_INDEX,
+		0u32 + HARDENED_KEY_START_INDEX,
+	];
+
+	let mut temp_private_key = private_key.to_vec();
+	let mut temp_chain_code = chain_code.to_vec();
+
+	for index in path {
+		let signature = {
+			let signing_key = Key::new(HMAC_SHA512, &temp_chain_code);
+			let mut h = Context::with_key(&signing_key);
+
+			let index_buffer: [u8; 4] = unsafe { transmute(index.to_be()) };
+			let mut data = vec![0x00];
+			data.extend(&temp_private_key);
+			data.extend(&index_buffer);
+
+			h.update(&data);
+			h.sign()
+		};
+		let sig_bytes = signature.as_ref();
+		let (private_key, chain_code) = sig_bytes.split_at(sig_bytes.len() / 2);
+
+		temp_private_key = private_key.to_vec();
+		temp_chain_code = chain_code.to_vec();
+
+//		println!("{:?}", private_key);
+//		println!("{:?}", chain_code);
+	}
+
+	let key = signature::Ed25519KeyPair::from_seed_unchecked(&temp_private_key).expect("seed has valid length; qed");
+
+	let public_key = key.public_key().as_ref();
+
+	let private_key = to_hex(&temp_private_key);
+
+	let public_key_hex = to_hex(public_key);
+
+	let address = bech32_address(public_key, "yee", None);
+
+	println!("  address#0 private key = {}", private_key);
+	println!("  address#0 public key = {}", public_key_hex);
+	println!("  address#0 address = {}", address);
+
+	assert_eq!(address, "yee1wnagctf0q30v665z3cfcjlukp3ucg7zdmuckwt");
 
 }
 
@@ -694,9 +775,8 @@ fn bch_address(public_key: PublicKey) -> String {
 
 // https://bitcointalk.org/index.php?topic=4992632.0
 // some coin does not have a segwit version, like BNB: https://docs.binance.org/blockchain.html#address
-fn bech32_address(public_key: PublicKey, hrp: &str, segwit_version: Option<u8>) -> String {
-	let public_key = &public_key.serialize()[..];
-	let buf = digest::digest(&digest::SHA256, &public_key);
+fn bech32_address(public_key: &[u8], hrp: &str, segwit_version: Option<u8>) -> String {
+	let buf = digest::digest(&digest::SHA256, public_key);
 	let mut hasher = Ripemd160::new();
 	hasher.input(&buf.as_ref());
 	let mut buf = hasher.result().to_vec().to_base32();
