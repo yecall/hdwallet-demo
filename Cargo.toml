@@ -1,0 +1,23 @@
+[package]
+name = "demos"
+version = "0.1.0"
+authors = ["guoxbin <guoxbin@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+tiny-bip39 = "0.6.2"
+hdwallet = "0.2.3"
+ring = "0.16.9"
+base58 = "0.1.0"
+ripemd160 = "0.8.0"
+hex = "0.3.2"
+secp256k1 = "0.12"
+lazy_static = "1.2.0"
+bs58 = { version = "0.3.0", features = ["check"] }
+sha3 = "0.8.2"
+bitcoincash-addr = "0.2.0"
+bech32 = "0.7.1"
+untrusted = { version = "0.6", optional = true }
+base32 = "0.4.0"
+crc16 = "0.4.0"
+sha2 = "0.8.0"
