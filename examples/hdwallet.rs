@@ -349,7 +349,7 @@ fn atom_derivation(seed: Seed) {
 
 	let key = serialize_extended_key::<BtcStrategy>(ExtendedKey::PrivKey(master_key), &derivation);
 
-	println!("TRX:");
+	println!("ATOM:");
 	println!("  root key = {}", key);
 
 	let (account_key, derivation) = key_chain.derive_private_key("m/44'/118'/0'".into()).unwrap();
