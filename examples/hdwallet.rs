@@ -587,21 +587,32 @@ fn yee_derivation(seed: Seed) {
 //		println!("{:?}", chain_code);
 	}
 
-	let key = signature::Ed25519KeyPair::from_seed_unchecked(&temp_private_key).expect("seed has valid length; qed");
+	println!("len: {}", temp_private_key.len());
 
-	let public_key = key.public_key().as_ref();
+	let mini_key = temp_private_key;
 
-	let private_key = to_hex(&temp_private_key);
+	let mini_key_hex = to_hex(&mini_key);
 
-	let public_key_hex = to_hex(public_key);
+	let mini_key = schnorrkel::MiniSecretKey::from_bytes(&mini_key).unwrap();
 
-	let address = bech32_address(public_key, "yee", None);
+	let key_pair = mini_key.expand_to_keypair();
 
-	println!("  address#0 private key = {}", private_key);
+	let public_key = key_pair.public.to_bytes();
+
+	let private_key = key_pair.secret.to_bytes();
+
+	let private_key_hex = to_hex(&private_key);
+
+	let public_key_hex = to_hex(&public_key);
+
+	let address = yee_address(&public_key, "tyee");
+
+	println!("  address#0 mini key = {}", mini_key_hex);
+	println!("  address#0 private key = {}", private_key_hex);
 	println!("  address#0 public key = {}", public_key_hex);
 	println!("  address#0 address = {}", address);
 
-	assert_eq!(address, "yee1wnagctf0q30v665z3cfcjlukp3ucg7zdmuckwt");
+	assert_eq!(address, "tyee14rqdm9l8a52ewhx95mg85w6p6ytlh0j2unayq0f8d670zcpj5ahsy3tl8c");
 
 }
 
@@ -807,6 +818,16 @@ fn trx_address(public_key: PublicKey) -> String {
 	a.push(0x41);
 	a.extend(out);
 	bs58::encode(&a).with_check().into_string()
+}
+
+fn yee_address(public_key: &[u8], hrp: &str) -> String {
+	let buf = public_key.to_base32();
+
+	let hrp_str : String  = hrp.into();
+	bech32::encode(
+		&hrp_str,
+		buf,
+	).unwrap()
 }
 
 fn xlm_public_key(public_key: &[u8]) -> String {
