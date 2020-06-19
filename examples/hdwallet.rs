@@ -15,6 +15,7 @@ use base32;
 use crc16;
 use ring::signature::KeyPair;
 use sha2::Sha512Trunc256;
+use schnorrkel::ExpansionMode;
 
 #[macro_use]
 extern crate lazy_static;
@@ -527,75 +528,35 @@ fn algo_derivation(seed: Seed) {
 }
 
 fn yee_derivation(seed: Seed) {
-	const HARDENED_KEY_START_INDEX: u32 = 2_147_483_648; // 2 ** 31
+	let master_key = ExtendedPrivKey::with_seed(seed.as_bytes()).unwrap();
 
-	let seed = seed.as_bytes();
+	let key_chain = DefaultKeyChain::new(master_key.clone());
 
-	let signature = {
-		let signing_key = Key::new(HMAC_SHA512, b"ed25519 seed");
-		let mut h = Context::with_key(&signing_key);
-		h.update(seed);
-		h.sign()
-	};
-	let sig_bytes = signature.as_ref();
-	let (private_key, chain_code) = sig_bytes.split_at(sig_bytes.len() / 2);
-//	println!("{:x?}", private_key);
-//	println!("{:x?}", chain_code);
+	let (master_key, derivation) = key_chain.derive_private_key("m".into()).unwrap();
 
-	let extended_private_key = ExtendedPrivKey { private_key: SecretKey::from_slice(private_key).expect("qed"), chain_code: chain_code.to_vec() };
-	let derivation = Derivation {
-		depth: 0u8,
-		parent_key: None,
-		key_index: None,
-	};
-	let key = serialize_extended_key::<XlmStrategy>(ExtendedKey::PrivKey(extended_private_key), &derivation);
+	let key = serialize_extended_key::<BtcStrategy>(ExtendedKey::PrivKey(master_key), &derivation);
 
 	println!("YEE:");
 	println!("  root key = {}", key);
 
-	let path = vec![
-		44u32 + HARDENED_KEY_START_INDEX,
-		4096u32 + HARDENED_KEY_START_INDEX,
-		0u32 + HARDENED_KEY_START_INDEX,
-		0u32 + HARDENED_KEY_START_INDEX,
-		0u32 + HARDENED_KEY_START_INDEX,
-	];
+	let (account_key, derivation) = key_chain.derive_private_key("m/44'/4096'/0'".into()).unwrap();
 
-	let mut temp_private_key = private_key.to_vec();
-	let mut temp_chain_code = chain_code.to_vec();
+	let account_extended_pub_key = serialize_extended_key::<BtcStrategy>(ExtendedKey::PubKey(ExtendedPubKey::from_private_key(&account_key)), &derivation);
+	let account_extended_priv_key = serialize_extended_key::<BtcStrategy>(ExtendedKey::PrivKey(account_key), &derivation);
 
-	for index in path {
-		let signature = {
-			let signing_key = Key::new(HMAC_SHA512, &temp_chain_code);
-			let mut h = Context::with_key(&signing_key);
+	println!("  account extended priv key = {}", account_extended_priv_key);
+	println!("  account extended pub key = {}", account_extended_pub_key);
 
-			let index_buffer: [u8; 4] = unsafe { transmute(index.to_be()) };
-			let mut data = vec![0x00];
-			data.extend(&temp_private_key);
-			data.extend(&index_buffer);
+	let (key, _derivation) = key_chain.derive_private_key("m/44'/4096'/0'/0/0".into()).unwrap();
 
-			h.update(&data);
-			h.sign()
-		};
-		let sig_bytes = signature.as_ref();
-		let (private_key, chain_code) = sig_bytes.split_at(sig_bytes.len() / 2);
+	let mini_key = key.private_key;
 
-		temp_private_key = private_key.to_vec();
-		temp_chain_code = chain_code.to_vec();
-
-//		println!("{:?}", private_key);
-//		println!("{:?}", chain_code);
-	}
-
-	println!("len: {}", temp_private_key.len());
-
-	let mini_key = temp_private_key;
-
-	let mini_key_hex = to_hex(&mini_key);
+	let mini_key_hex = format!("{}", mini_key);
+	let mini_key = hex::decode(&mini_key_hex).unwrap();
 
 	let mini_key = schnorrkel::MiniSecretKey::from_bytes(&mini_key).unwrap();
 
-	let key_pair = mini_key.expand_to_keypair();
+	let key_pair = mini_key.expand_to_keypair(ExpansionMode::Ed25519);
 
 	let public_key = key_pair.public.to_bytes();
 
@@ -612,7 +573,16 @@ fn yee_derivation(seed: Seed) {
 	println!("  address#0 public key = {}", public_key_hex);
 	println!("  address#0 address = {}", address);
 
-	assert_eq!(address, "tyee14rqdm9l8a52ewhx95mg85w6p6ytlh0j2unayq0f8d670zcpj5ahsy3tl8c");
+	assert_eq!(address, "tyee1fmcpyhatzu7why7wfs4f0e5zgwtzgqgph8rjyr3l6clr5g5zeusqxvw0l9");
+
+
+	// let mini_key = hex::decode("d8c7461890ee897c622b778cc65e878032d94a8ee401c07367852efc49ab8dbc").unwrap();
+	// let mini_key = schnorrkel::MiniSecretKey::from_bytes(&mini_key).unwrap();
+	// let secret_key = mini_key.expand();
+	// println!("s: {}", to_hex(&secret_key.to_bytes()));
+	//
+	// let public_key = secret_key.to_public().to_bytes();
+	// println!("p: {}", to_hex(&public_key));
 
 }
 
