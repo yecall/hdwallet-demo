@@ -566,14 +566,17 @@ fn yee_derivation(seed: Seed) {
 
 	let public_key_hex = to_hex(&public_key);
 
-	let address = yee_address(&public_key, "tyee");
+	let test_address = yee_address(&public_key, "tyee");
+	let address = yee_address(&public_key, "yee");
 
 	println!("  address#0 mini key = {}", mini_key_hex);
 	println!("  address#0 private key = {}", private_key_hex);
 	println!("  address#0 public key = {}", public_key_hex);
+	println!("  address#0 test_address = {}", test_address);
 	println!("  address#0 address = {}", address);
 
-	assert_eq!(address, "tyee1fmcpyhatzu7why7wfs4f0e5zgwtzgqgph8rjyr3l6clr5g5zeusqxvw0l9");
+	assert_eq!(test_address, "tyee1fmcpyhatzu7why7wfs4f0e5zgwtzgqgph8rjyr3l6clr5g5zeusqxvw0l9");
+	assert_eq!(address, "yee1fmcpyhatzu7why7wfs4f0e5zgwtzgqgph8rjyr3l6clr5g5zeusqttfe7k");
 
 
 	// let mini_key = hex::decode("d8c7461890ee897c622b778cc65e878032d94a8ee401c07367852efc49ab8dbc").unwrap();
